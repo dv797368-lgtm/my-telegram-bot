@@ -1,39 +1,60 @@
-import os
+#!/usr/bin/env python
+# coding: utf-8
+
+import telebot
+from telebot import types
+from aliexpress_api import AliexpressApi, models
+import re, requests, json, traceback, os
+from urllib.parse import quote
+from datetime import datetime
+from dotenv import load_dotenv
 from flask import Flask
 import threading
-from telegram.ext import Updater, CommandHandler
 
-# ⚠️ ضع التوكن تاع البوت هنا
-TOKEN = "7473686932:AAEmpKvL4rJyC2aEzyJ3be65eCF2FFdwc6A"
+# --- Load Environment Variables ---
+load_dotenv()
 
-# ----------------------
-# بوت تيليغرام
-# ----------------------
-def start(update, context):
-    update.message.reply_text("✅ البوت شغال على Render!")
+# --- Configuration Settings ---
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ALIEXPRESS_APP_KEY = os.getenv("ALIEXPRESS_APP_KEY")
+ALIEXPRESS_APP_SECRET = os.getenv("ALIEXPRESS_APP_SECRET")
+CURRENCY_CODE = os.getenv("CURRENCY_CODE", "USD")
+SHIP_TO_COUNTRY = os.getenv("SHIP_TO_COUNTRY", "CA")
 
-def run_bot():
-    updater = Updater(TOKEN, use_context=True)
-    dp = updater.dispatcher
-    dp.add_handler(CommandHandler("start", start))
-    updater.start_polling()
-    updater.idle()
+# --- Bot Initialization ---
+if not BOT_TOKEN:
+    print("!!! خطأ فادح: لم يتم العثور على BOT_TOKEN. يرجى إعداده في ملف .env")
+    exit()
 
-# ----------------------
-# سيرفر ويب صغير
-# ----------------------
+bot = telebot.TeleBot(BOT_TOKEN)
+aliexpress = AliexpressApi(
+    ALIEXPRESS_APP_KEY,
+    ALIEXPRESS_APP_SECRET,
+    models.Language.AR,
+    CURRENCY_CODE,
+    'default',
+    ship_to_country=SHIP_TO_COUNTRY
+)
+
+# --- Flask Server for Render ---
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "✅ Bot is running on Render!"
+    return "✅ Telegram Bot is running on Render!"
 
 def run_web():
-    port = int(os.environ.get("PORT", 5000))  # Render يفرض PORT خاص
+    port = int(os.environ.get("PORT", 5000))  # Render يعطي PORT تلقائيا
     app.run(host="0.0.0.0", port=port)
 
-# ----------------------
-# تشغيل الاثنين
-# ----------------------
-threading.Thread(target=run_bot).start()
-run_web()
+def run_bot():
+    print(f"🤖 Bot starting... [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]")
+    bot.infinity_polling(timeout=20)
+
+# --- Threads: bot + flask ---
+if __name__ == '__main__':
+    if not all([BOT_TOKEN, ALIEXPRESS_APP_KEY, ALIEXPRESS_APP_SECRET]):
+        print("!!! خطأ: يرجى إعداد متغيرات البيئة (BOT_TOKEN, ALIEXPRESS_APP_KEY, ALIEXPRESS_APP_SECRET)")
+    else:
+        threading.Thread(target=run_bot).start()
+        run_web()
